@@ -1,0 +1,66 @@
+== TEST Controller Install
+
+=== Quick Setup
+
+ 1. Install bundler
+ 
+   gem install bundler
+  
+ 2. Use bundler to install required gems
+ 
+   bundle install
+   
+ 3. Install the right_cloud_stack client gem (for some reason bundler is not honoring the :path setting, but I'm too tired to debug)
+ 
+   gem install vendor/right_cloud_stack
+
+
+=== To reproduce my setup in a clean ruby environment
+
+If you find yourself in "gem hell" due to some dependency problems in your ruby environment, or if you don't have a ruby environment at all you might have better luck with the setup instruction below.  In this setup you install the RVM ruby manager to install the exact version of ruby I developed with.  Then you create a clean gemset in which to install the project 'bundle'.
+  
+Here are the commands I used on a CentOS 5 VM... 
+
+(be sure to run as root)
+
+  1. Install RVM (see http://rvm.beginrescueend.com/rvm/install/)
+
+    curl -L get.rvm.io | bash -s stable # install rvm
+
+  2. Install ruby 1.9.2 with openssl (http://beginrescueend.com/packages/openssl/)
+
+    rvm pkg install openssl
+    rvm install ruby-1.9.2-p290 --with-openssl-dir=/usr/local/rvm/usr
+    rvm gemset create kvm_snap_test
+
+  3. Enter project dir with .rvmrc and run bundler to install gem dependencies
+     rvm will ask you if you wish to trust this .rvmrc -- say yes.
+
+    cd kvm_snap_test 
+
+     You should see:
+
+      /root/kvm_snap_test
+      ====================================================================================
+      = NOTICE                                                                           =
+      ====================================================================================
+      = RVM has encountered a new or modified .rvmrc file in the current directory       =
+      = This is a shell script and therefore may contain any shell commands.             =
+      =                                                                                  =
+      = Examine the contents of this file carefully to be sure the contents are          =
+      = safe before trusting it! ( Choose v[iew] below to view the contents )            =
+      ====================================================================================
+      Do you wish to trust this .rvmrc file? (/root/kvm_snapshot_test/.rvmrc)
+      y[es], n[o], v[iew], c[ancel]> y
+      Using /usr/local/rvm/gems/ruby-1.9.2-p320 with gemset kvm_snap_test
+
+  4. Install bundler
+
+    gem install bundler
+
+  5. Use bundler to install gem dependencies for the test
+
+    bundle install
+
+
+Good Luck!

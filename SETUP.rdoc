@@ -1,0 +1,6 @@
+= SETUP
+ 1. Install this project onto a workstation or VM as your "test controller".  See INSTALL.rdoc for instructions.
+ 2. Launch two "test" VMs on a KVM hypervisor that will be the target of the test operations (Name one "master" and one "slave".) 
+ 3. Be sure to add your public SSH key material to /root/.ssh/authorized_keys on each VM so we can run remote commands from the test controller.
+ 4. Edit the bin/snap_test file an update the MASTER_IP, MASTER_ID, SLAVE_IP, SLAVE_ID values to point to the VMs you just launched.
+ 5. run bin/snap_test (preferably in a screen or tmux session -- since it might take a while)

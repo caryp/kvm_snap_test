@@ -1,0 +1,29 @@
+= KVM LIVE SNAPSHOT TEST
+
+== Overview 
+
+This project reproduces a live-snapshot corruption issue on the KVM hypervisor using the cloudstack 2.2 api.  The problem occurs when taking a snapshot of a newly created volume attached to a running VM.  Upon creating a volume from that snapshot and attaching to a second VM, we find the data is corrupted.  While this is an intermittent issue, this test has reproduced the issue three times in about 60 iterations.
+
+This test was written using the Cloudstack API, if you want to add support for another orchestration layer (i.e. openstack, libvirt, etc.) look at implementing the interface defined in the CDCAPI found in lib/cdc_api.rb.
+
+The basic operations performed are:
+ 1. create/attach/format/mount a fresh volume to "VM1"
+ 2. create a medium sized file on the volume and calculate it's MD5 (for later comparison)
+ 3. flush the filesystem
+ 4. snapshot the volume
+ 5. from snapshot, create/attach/mount a new volume to "VM2"
+ 6. compare the MD5 sum on the new volume -- fail if different
+ 7. unmount/detach/delete volumes from both vms
+ 8. if pass, repeat.
+
+
+== Getting Started
+
+ 1. Get the source code
+  
+  git clone http://github.com/caryp/kvm_snap_test.git
+
+ 2. See SETUP.rdoc for test setup instructions.
+ 
+ 3. Contact me if you have any trouble getting this script setup as I hacked this together fairly quickly.
+

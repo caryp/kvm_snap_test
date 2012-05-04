@@ -1,0 +1,159 @@
+#!/usr/bin/env ruby
+
+$LOAD_PATH.unshift(File.dirname(__FILE__))
+$LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
+
+require "rubygems"
+require "logger"
+require "cdc_api.rb"
+
+# TODO -- set these!
+#
+# You must manually set these after you get the two KVM VMs running
+#
+MASTER_IP = "173.227.0.102"
+MASTER_ID = "3392"         
+SLAVE_IP = "173.227.0.104" 
+SLAVE_ID = "3393"          
+
+
+# Also, your VMs require public ssh keys for the root user
+# to exist that match your CLOUD_KEY private key path
+#
+# You must also have the following values set in your environment:
+#
+# ENV["API_KEY"]    -- cloudstack api key
+# ENV["API_SECRET"] -- cloudstack api secret
+# ENV["API_URL"]    -- cloudstack api endpoint
+# ENV["CLOUD_KEY"]  -- local file path to your private SSH key material
+#
+%w{API_KEY API_SECRET API_URL CLOUD_KEY}.each do |var|
+  raise "ERROR: you must set #{var} in you environment" unless ENV[var]
+end
+PRIVATE_SSH_KEY_FILE = ENV["CLOUD_KEY"]
+
+
+# Utility for sending commands to VM
+# Requires VMs to have publish SSH key installed.
+def remote_cmd(ip_addr, command)
+  ret = `ssh -i #{PRIVATE_SSH_KEY_FILE} root@#{ip_addr} '#{command}'`
+  puts ret
+  ret
+end
+
+def sleep_now(seconds, log = Logger.new(STDOUT))
+  log.info("Sleeping #{seconds} seconds...")
+  sleep seconds
+end
+
+
+def run(cleanup = true)
+  
+  start_time = Time.now
+  log = Logger.new(STDOUT)
+  log.level == Logger::INFO
+  
+  log.info("Starting test at #{start_time}")
+  
+  api = CDCAPI.new(ENV["API_URL"], ENV["API_KEY"], ENV["API_SECRET"], log)
+  
+  
+  # Setup
+  #
+  remote_cmd(MASTER_IP, "mkdir /mnt/master") # for mounting source volume
+  remote_cmd(SLAVE_IP,"mkdir /mnt/slave")  # for mounting snapshots volumes 
+
+  # Test loop
+  #
+  count = 0
+  passing = true
+  while (passing)
+    count += 1
+    log.info "Pass #{count}"
+    
+    # 
+    # Create and attach volume to "master" VM
+    # 
+    master_volume_id = api.volume_create("kvm_test_master") 
+    # gather on to the list of current devices (KVM Workaround - part 1)  
+    partitions = remote_cmd(MASTER_IP, "cat /proc/partitions")
+    devices_before_attach = api.get_current_devices(partitions)
+    device = api.volume_attach(MASTER_ID, master_volume_id)
+    log.info "KVM WORKAROUND PART1: ignoring device from API #{device}"
+    # don't believe device returned by API (KVM Workaround - part 2)
+    partitions = remote_cmd(MASTER_IP, "cat /proc/partitions")
+    current_devices = api.get_current_devices(partitions)
+    device = (Set.new(current_devices) - Set.new(devices_before_attach)).first
+    log.info "KVM WORKAROUND PART2: using device #{device}"
+  
+    #
+    # Create xfs filesystem, mount and create testfile
+    #
+    remote_cmd(MASTER_IP, "mkfs.xfs #{device}")
+    remote_cmd(MASTER_IP, "mount #{device} /mnt/master")
+    remote_cmd(MASTER_IP, "sync")
+    # Create testfile for compare
+    log.info "Generating new testfile..."
+    remote_cmd(MASTER_IP, "dd if=/dev/urandom of=/mnt/master/testfile bs=16M count=8")
+    log.info "Calculate fingerprint of testfile..."
+    r = remote_cmd(MASTER_IP, "md5sum /mnt/master/testfile")
+    md5_orig = r.split(" ").first
+    
+    #
+    # Sync filesystem and take snapshot of master volume
+    #
+    log.info " Take snapshot, create a volume from it, and attach to slave..."
+    remote_cmd(MASTER_IP, "sync")
+    snap_id = api.snapshot_create(master_volume_id)    
+    
+    #
+    # Create volume from snapshot and attach to "slave" VM
+    #
+    slave_id = api.volume_create_from_snap("kvm_test_slave", snap_id)
+    log.info "KVM WORKAROUND PART1: ignoring device from API #{device}"
+    device = api.volume_attach(SLAVE_ID, slave_id)
+    # don't believe device returned by API (KVM Workaround - part 2)
+    partitions = remote_cmd(SLAVE_IP, "cat /proc/partitions")
+    current_devices = api.get_current_devices(partitions)
+    device = (Set.new(current_devices) - Set.new(devices_before_attach)).first
+    log.info "KVM WORKAROUND PART2: using device #{device}"
+
+    #
+    # Verify that the testfile fingerprints match (fail if they dont)
+    #
+    log.info "  Verify the fingerprint of testfile..."
+    remote_cmd(SLAVE_IP,"mount #{device} /mnt/slave")
+    r = remote_cmd(SLAVE_IP,"md5sum /mnt/slave/testfile")
+    md5_snap = r.split(" ").first
+    if md5_orig == md5_snap
+      log.info "  PASS: snapshot files match! Orig:#{md5_orig} From Snapshot:#{md5_snap}"
+    else
+      log.error "  FAIL: signatures don't match. Orig:#{md5_orig} From Snapshot:#{md5_snap}" 
+      passing = false
+    end
+    
+    #
+    # Cleanup for next iteration (or unless we failed and cleanup == false)
+    #
+    if cleanup || passing
+      log.info "  Cleaning up slave..."
+      remote_cmd(SLAVE_IP,"umount /mnt/slave")
+      api.snapshot_delete(snap_id)
+      api.volume_detach(slave_id)  
+      api.volume_delete(slave_id)
+      log.info "  Cleaning up master..."
+      remote_cmd(MASTER_IP,"umount /mnt/master")
+      api.volume_detach(master_volume_id)  
+      api.volume_delete(master_volume_id)
+    else
+      log.info "  FAILED: Not cleaning up to allow for system inspection..."
+    end
+    
+  end
+  
+  end_time = Time.now
+  log.info "Iterations: #{count} Start:#{start_time} End:#{end_time} Total: #{end_time-start_time}"  
+  
+end 
+
+run
