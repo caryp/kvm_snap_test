@@ -63,13 +63,7 @@ def run(cleanup = true)
   remote_cmd(MASTER_IP, "mkdir /mnt/master") # for mounting source volume
   remote_cmd(SLAVE_IP,"mkdir /mnt/slave")  # for mounting snapshots volumes 
 
-  # Test loop
-  #
-  count = 0
-  passing = true
-  while (passing)
-    count += 1
-    log.info "Pass #{count}"
+
     
     # 
     # Create and attach volume to "master" VM
@@ -92,8 +86,17 @@ def run(cleanup = true)
     remote_cmd(MASTER_IP, "mkfs.xfs #{device}")
     remote_cmd(MASTER_IP, "mount #{device} /mnt/master")
     remote_cmd(MASTER_IP, "sync")
+    
+  # Test loop
+  #
+  count = 0
+  passing = true
+  while (passing)
+    count += 1
+    log.info "Pass #{count}"
+    
     # Create testfile for compare
-    log.info "Generating new testfile..."
+    log.info "Generating new testfile (possibly overwritting existing file)..."
     remote_cmd(MASTER_IP, "dd if=/dev/urandom of=/mnt/master/testfile bs=16M count=8")
     log.info "Calculate fingerprint of testfile..."
     r = remote_cmd(MASTER_IP, "md5sum /mnt/master/testfile")
@@ -141,10 +144,10 @@ def run(cleanup = true)
       api.snapshot_delete(snap_id)
       api.volume_detach(slave_id)  
       api.volume_delete(slave_id)
-      log.info "  Cleaning up master..."
-      remote_cmd(MASTER_IP,"umount /mnt/master")
-      api.volume_detach(master_volume_id)  
-      api.volume_delete(master_volume_id)
+      # log.info "  Cleaning up master..."
+      #       remote_cmd(MASTER_IP,"umount /mnt/master")
+      #       api.volume_detach(master_volume_id)  
+      #       api.volume_delete(master_volume_id)
     else
       log.info "  FAILED: Not cleaning up to allow for system inspection..."
     end
