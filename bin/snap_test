@@ -97,7 +97,7 @@ def run(cleanup = true)
     
     # Create testfile for compare
     log.info "Generating new testfile (possibly overwritting existing file)..."
-    remote_cmd(MASTER_IP, "dd if=/dev/urandom of=/mnt/master/testfile bs=16M count=8")
+    remote_cmd(MASTER_IP, "dd if=/dev/urandom of=/mnt/master/testfile bs=1024 count=524288")
     log.info "Calculate fingerprint of testfile..."
     r = remote_cmd(MASTER_IP, "md5sum /mnt/master/testfile")
     md5_orig = r.split(" ").first
